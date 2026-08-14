@@ -9,9 +9,39 @@ Instead of restarting the PC to temporarily resolve the issue, this utility powe
 
 ## Features
 - **Fast Diagnostics**: Instantly check if the I2C HID Device is in an error state.
-- **Bus Power Cycle**: Restarts the Intel/AMD Serial IO I2C Host Controller, forcing the I2C bus to reinitialize.
+- **Layered Bus Reset Logic**:
+  1. Toggles (disables/enables) the `I2C HID Device` itself.
+  2. If that fails, power-cycles the Intel/AMD Serial IO I2C Host Controllers.
+  3. If still unsuccessful, uninstalls the touchpad and triggers a hardware scan (equivalent to your manual Device Manager fix).
 - **Admin Elevation**: Prompts for UAC automatically if needed to perform device management commands.
-- **Automated Fix (Scheduled Task)**: Auto-runs in the background whenever the computer wakes up from sleep/hibernation or on system login.
+- **Automated Fix (Scheduled Task)**: Installs a task that runs silently in the background whenever the computer wakes up from sleep/hibernation or on system login. Runs on battery power too!
+- **Windows Toast Notifications**: Displays a native system notification when the touchpad is successfully recovered.
 
-## Usage
-*Instructions will be updated as scripts are developed.*
+## Installation & Setup
+
+1. Open PowerShell as **Administrator** and navigate to this folder.
+2. Run the following command to register the automatic background fixer:
+   ```powershell
+   .\Fix-Touchpad.ps1 -Install
+   ```
+3. (Optional) Run the script manually to diagnose or force a reset at any time:
+   ```powershell
+   # Standard diagnostic run (only resets if error is detected)
+   .\Fix-Touchpad.ps1
+
+   # Force reset regardless of current detected status
+   .\Fix-Touchpad.ps1 -Force
+   ```
+
+## Command Line Parameters
+- `-Force`: Resets the touchpad and I2C controllers even if diagnostics report that the touchpad is working normally.
+- `-Silent`: Suppresses console window logs (used by the automation background task).
+- `-LogFile <Path>`: Logs actions to a text file (defaults to `C:\ProgramData\TouchpadFixer\touchpad-fixer.log`).
+- `-Install`: Installs the Windows Scheduled Task to run this script automatically on login and sleep wakeups.
+- `-Uninstall`: Removes the Windows Scheduled Task.
+
+## Uninstallation
+To remove the background task, run:
+```powershell
+.\Fix-Touchpad.ps1 -Uninstall
+```
