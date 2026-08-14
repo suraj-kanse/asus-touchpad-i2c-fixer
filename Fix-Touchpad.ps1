@@ -11,7 +11,7 @@ param(
 )
 
 $TOUCHPAD_HARDWARE_ID = "*ASUP1204*"
-$TOUCHPAD_FRIENDLY_NAME = "I2C HID Device"
+$TOUCHPAD_FRIENDLED_NAME = "I2C HID Device"
 $TASK_NAME = "TouchpadFixer"
 
 # Initialize Logging
@@ -53,16 +53,53 @@ function Write-Log {
     }
 }
 
+# Toast Notification Helper
+function Send-Notification {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Title,
+        [string]$Message
+    )
+
+    try {
+        [void][Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType=WindowsRuntime]
+        [void][Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType=WindowsRuntime]
+        
+        $toastXml = [Windows.Data.Xml.Dom.XmlDocument]::new()
+        $escapedTitle = [System.Security.SecurityElement]::Escape($Title)
+        $escapedMessage = [System.Security.SecurityElement]::Escape($Message)
+        
+        $template = @"
+<toast>
+  <visual>
+    <binding template="ToastGeneric">
+      <text>$escapedTitle</text>
+      <text>$escapedMessage</text>
+    </binding>
+  </visual>
+</toast>
+"@
+        $toastXml.LoadXml($template)
+        
+        $appId = "Microsoft.Windows.Explorer"
+        $toast = [Windows.UI.Notifications.ToastNotification]::new($toastXml)
+        [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($appId).Show($toast)
+        Write-Log "Toast notification sent: '$Title' - '$Message'" "INFO"
+    } catch {
+        Write-Log "Failed to show toast notification: $_" "WARNING"
+    }
+}
+
 function Test-IsAdmin {
     return [bool]([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
 function Get-TouchpadDevice {
-    $device = Get-PnpDevice -FriendlyName $TOUCHPAD_FRIENDLY_NAME -ErrorAction SilentlyContinue | 
+    $device = Get-PnpDevice -FriendlyName $TOUCHPAD_FRIENDLED_NAME -ErrorAction SilentlyContinue | 
               Where-Object { $_.HardwareID -like $TOUCHPAD_HARDWARE_ID -or $_.InstanceId -like "*ASUP*" }
     
     if (-not $device) {
-        $device = Get-PnpDevice -FriendlyName $TOUCHPAD_FRIENDLY_NAME -ErrorAction SilentlyContinue
+        $device = Get-PnpDevice -FriendlyName $TOUCHPAD_FRIENDLED_NAME -ErrorAction SilentlyContinue
     }
 
     if ($device -is [array]) {
@@ -101,6 +138,7 @@ function Reset-Touchpad {
         $device = Get-TouchpadDevice
         if ($device.Status -eq "OK") {
             Write-Log "Success: Touchpad is now working (Method 1)." "SUCCESS"
+            Send-Notification -Title "Touchpad Auto-Fixer" -Message "Touchpad was successfully reset and is now working (Method 1)."
             return $true
         }
     } catch {
@@ -126,6 +164,7 @@ function Reset-Touchpad {
         $device = Get-TouchpadDevice
         if ($device.Status -eq "OK") {
             Write-Log "Success: Touchpad is now working (Method 2)." "SUCCESS"
+            Send-Notification -Title "Touchpad Auto-Fixer" -Message "I2C bus power-cycled. Touchpad is working (Method 2)."
             return $true
         }
     }
@@ -141,6 +180,7 @@ function Reset-Touchpad {
         $device = Get-TouchpadDevice
         if ($device -and $device.Status -eq "OK") {
             Write-Log "Success: Touchpad has been reinstalled and is now working (Method 3)." "SUCCESS"
+            Send-Notification -Title "Touchpad Auto-Fixer" -Message "Touchpad driver reinstalled. Touchpad is working (Method 3)."
             return $true
         }
     } catch {
@@ -151,9 +191,11 @@ function Reset-Touchpad {
     $device = Get-TouchpadDevice
     if ($device -and $device.Status -eq "OK") {
         Write-Log "Touchpad is working!" "SUCCESS"
+        Send-Notification -Title "Touchpad Auto-Fixer" -Message "Touchpad reset succeeded."
         return $true
     } else {
         Write-Log "Could not recover the touchpad. Manual intervention or a restart may be required." "ERROR"
+        Send-Notification -Title "Touchpad Auto-Fixer" -Message "Failed to recover touchpad. Manual reset or restart required."
         return $false
     }
 }
@@ -161,7 +203,6 @@ function Reset-Touchpad {
 function Register-AutomationTask {
     Write-Log "Registering Windows Scheduled Task for automation..." "INFO"
     
-    # Task XML template for wakeup and logon triggers
     $xmlTemplate = @"
 <?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
@@ -232,7 +273,6 @@ function Register-AutomationTask {
 function Unregister-AutomationTask {
     Write-Log "Unregistering Windows Scheduled Task..." "INFO"
     try {
-        # Check if task exists
         Get-ScheduledTask -TaskName $TASK_NAME -ErrorAction Stop | Out-Null
         Unregister-ScheduledTask -TaskName $TASK_NAME -Confirm:$false | Out-Null
         Write-Log "Successfully unregistered Scheduled Task '$TASK_NAME'." "SUCCESS"
