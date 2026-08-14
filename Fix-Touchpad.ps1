@@ -5,11 +5,14 @@
 param(
     [switch]$Force,
     [switch]$Silent,
-    [string]$LogFile = "$env:ProgramData\TouchpadFixer\touchpad-fixer.log"
+    [string]$LogFile = "$env:ProgramData\TouchpadFixer\touchpad-fixer.log",
+    [switch]$Install,
+    [switch]$Uninstall
 )
 
 $TOUCHPAD_HARDWARE_ID = "*ASUP1204*"
 $TOUCHPAD_FRIENDLY_NAME = "I2C HID Device"
+$TASK_NAME = "TouchpadFixer"
 
 # Initialize Logging
 function Write-Log {
@@ -155,15 +158,126 @@ function Reset-Touchpad {
     }
 }
 
+function Register-AutomationTask {
+    Write-Log "Registering Windows Scheduled Task for automation..." "INFO"
+    
+    # Task XML template for wakeup and logon triggers
+    $xmlTemplate = @"
+<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Date>2026-08-14T19:22:00</Date>
+    <Author>Touchpad Fixer Utility</Author>
+    <Description>Automatically runs touchpad diagnostics and resets the I2C bus on wakeup/logon.</Description>
+  </RegistrationInfo>
+  <Triggers>
+    <LogonTrigger>
+      <Enabled>true</Enabled>
+    </LogonTrigger>
+    <EventTrigger>
+      <Enabled>true</Enabled>
+      <Subscription>&lt;QueryList&gt;&lt;Query Id="0" Path="System"&gt;&lt;Select Path="System"&gt;*[System[Provider[@Name='Microsoft-Windows-Kernel-Power'] and (EventID=107 or EventID=507)]]&lt;/Select&gt;&lt;/Query&gt;&lt;/QueryList&gt;</Subscription>
+    </EventTrigger>
+    <EventTrigger>
+      <Enabled>true</Enabled>
+      <Subscription>&lt;QueryList&gt;&lt;Query Id="0" Path="System"&gt;&lt;Select Path="System"&gt;*[System[Provider[@Name='Microsoft-Windows-Power-Troubleshooter'] and (EventID=1)]]&lt;/Select&gt;&lt;/Query&gt;&lt;/QueryList&gt;</Subscription>
+    </EventTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <GroupId>S-1-5-32-544</GroupId>
+      <RunLevel>HighestAvailable</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <AllowHardTerminate>true</AllowHardTerminate>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+    <IdleSettings>
+      <StopOnIdleEnd>false</StopOnIdleEnd>
+      <RestartOnIdle>false</RestartOnIdle>
+    </IdleSettings>
+    <AllowStartOnDemand>true</AllowStartOnDemand>
+    <Enabled>true</Enabled>
+    <Hidden>false</Hidden>
+    <RunOnlyIfIdle>false</RunOnlyIfIdle>
+    <WakeToRun>false</WakeToRun>
+    <ExecutionTimeLimit>PT1M</ExecutionTimeLimit>
+    <Priority>7</Priority>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>powershell.exe</Command>
+      <Arguments>-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "SCRIPT_PATH" -Silent</Arguments>
+    </Exec>
+  </Actions>
+</Task>
+"@
+
+    $xml = $xmlTemplate.Replace("SCRIPT_PATH", $PSCommandPath)
+
+    try {
+        Register-ScheduledTask -TaskName $TASK_NAME -Xml $xml -Force | Out-Null
+        Write-Log "Successfully registered Scheduled Task '$TASK_NAME'." "SUCCESS"
+        Write-Log "The script will run automatically on logon and system wake (from sleep or Modern Standby)." "SUCCESS"
+    } catch {
+        Write-Log "Failed to register Scheduled Task: $_" "ERROR"
+        exit 1
+    }
+}
+
+function Unregister-AutomationTask {
+    Write-Log "Unregistering Windows Scheduled Task..." "INFO"
+    try {
+        # Check if task exists
+        Get-ScheduledTask -TaskName $TASK_NAME -ErrorAction Stop | Out-Null
+        Unregister-ScheduledTask -TaskName $TASK_NAME -Confirm:$false | Out-Null
+        Write-Log "Successfully unregistered Scheduled Task '$TASK_NAME'." "SUCCESS"
+    } catch {
+        Write-Log "Scheduled Task '$TASK_NAME' is not registered or could not be removed." "WARNING"
+    }
+}
+
 # Main Execution Flow
 if (-not $Silent) {
     Write-Host "ASUS Touchpad Fixer Utility" -ForegroundColor White -BackgroundColor DarkBlue
     Write-Host "===========================" -ForegroundColor White
 }
 
+# 1. Check Admin Elevation for Task Actions or Reset
+$isAdmin = Test-IsAdmin
+
+if ($Install -or $Uninstall) {
+    if (-not $isAdmin) {
+        Write-Log "Action requires Administrator privileges. Requesting elevation..." "WARNING"
+        $argList = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
+        if ($Install) { $argList += " -Install" }
+        if ($Uninstall) { $argList += " -Uninstall" }
+        if ($LogFile) { $argList += " -LogFile `"$LogFile`"" }
+        
+        try {
+            Start-Process powershell -ArgumentList $argList -Verb RunAs
+            exit 0
+        } catch {
+            Write-Log "UAC elevation failed. Please run PowerShell as Administrator to install/uninstall." "ERROR"
+            exit 1
+        }
+    }
+
+    if ($Install) {
+        Register-AutomationTask
+    } elseif ($Uninstall) {
+        Unregister-AutomationTask
+    }
+    exit 0
+}
+
 Write-Log "Starting touchpad diagnostics..." "INFO"
 
-# 1. Diagnose
+# 2. Diagnose Touchpad
 $device = Get-TouchpadDevice
 if (-not $device) {
     Write-Log "No touchpad device found." "WARNING"
@@ -178,10 +292,9 @@ if ($device.Status -eq "OK" -and -not $Force) {
     exit 0
 }
 
-# 2. Check Admin Elevation
-$isAdmin = Test-IsAdmin
+# 3. Check Admin Elevation for Reset
 if (-not $isAdmin) {
-    Write-Log "Script is not running with Administrator privileges. Requesting elevation..." "WARNING"
+    Write-Log "Reset requires Administrator privileges. Requesting elevation..." "WARNING"
     
     $argList = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
     if ($Force) { $argList += " -Force" }
@@ -197,7 +310,7 @@ if (-not $isAdmin) {
     }
 }
 
-# 3. Perform Reset
+# 4. Perform Reset
 $result = Reset-Touchpad
 if ($result) {
     exit 0
