@@ -12,8 +12,10 @@ In Windows Device Manager, the **I2C HID Device** shows a yellow warning triangl
 
 ### 2. HW vs. SW Diagnosis: How it was identified as a Software Issue
 Before attempting to fix it, it was critical to determine if this was a physical hardware failure (e.g., a loose ribbon cable or a faulty touchpad sensor) or a software driver/ACPI issue:
-- **No Physical Intermittency**: The touchpad never cut out during active typing, moving the laptop, or adjusting the screen angle (which is typical for loose cables). It only failed *precisely* when transitioning system power states (resuming from Sleep/Modern Standby or a hybrid shutdown).
-- **100% Software Recovery**: Uninstalling the device in Device Manager and rebooting the laptop restored touchpad functionality without fail, proving the physical hardware module was fully operational.
+- **Explicit Driver Failure**: Windows Device Manager explicitly flagged the driver with a yellow warning triangle (`Code 10`), indicating that the OS kernel itself was actively refusing to start the driver due to a failed handshake, rather than the device physically disappearing from the PCI/ACPI bus.
+- **One-way Hardware Key Lockup**: Pressing the touchpad toggle hotkey (typically **F6** or **Fn+F9**) could disable the touchpad, but would completely fail to enable it back. This proved that the underlying driver software was in a hung state and unresponsive to OS-level inputs.
+- **No Physical Intermittency**: The touchpad never cut out during active typing, moving the laptop, or adjusting the screen angle (which is typical for loose hardware cables). It only failed *precisely* when transitioning system power states (resuming from Sleep/Modern Standby or a hybrid shutdown).
+- **100% Software Recovery**: Uninstalling the device in Device Manager and rebooting the laptop restored touchpad functionality without fail, proving the physical hardware module was fully operational and the issue was entirely state-based.
 - **Protocol Failure (Descriptor Timeout)**: The `Code 10: HID descriptor failed` error indicated a low-level protocol mismatch where the Windows driver timed out waiting for the device to send its configuration descriptors on wakeup. 
 
 ### 3. The Temporary Fix
