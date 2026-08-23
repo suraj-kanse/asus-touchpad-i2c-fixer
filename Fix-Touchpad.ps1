@@ -118,6 +118,13 @@ function Get-I2CControllers {
     }
 }
 
+function Get-GPIOControllers {
+    return Get-PnpDevice -ErrorAction SilentlyContinue | Where-Object { 
+        $_.FriendlyName -like "*GPIO Host Controller*" -or 
+        $_.FriendlyName -like "*GPIO Controller*"
+    }
+}
+
 function Reset-Touchpad {
     $device = Get-TouchpadDevice
     if (-not $device) {
@@ -145,28 +152,65 @@ function Reset-Touchpad {
         Write-Log "Method 1 failed: $_" "WARNING"
     }
 
-    # Method 2: Try power-cycling the I2C Controllers
-    Write-Log "Method 2: Resetting Intel/AMD Serial IO I2C Host Controllers..." "INFO"
-    $controllers = Get-I2CControllers
-    if ($controllers) {
-        foreach ($ctrl in $controllers) {
-            Write-Log "Restarting: $($ctrl.FriendlyName)..." "INFO"
-            try {
-                Disable-PnpDevice -InstanceId $ctrl.InstanceId -Confirm:$false -ErrorAction Stop
-                Start-Sleep -Seconds 1
-                Enable-PnpDevice -InstanceId $ctrl.InstanceId -Confirm:$false -ErrorAction Stop
-            } catch {
-                Write-Log "Failed to restart controller $($ctrl.FriendlyName): $_" "WARNING"
+    # Method 2: Coordinated Reset of Serial IO GPIO and I2C Host Controllers
+    Write-Log "Method 2: Coordinated reset of Serial IO GPIO and I2C Host Controllers..." "INFO"
+    $i2cCtrls = Get-I2CControllers
+    $gpioCtrls = Get-GPIOControllers
+    
+    try {
+        # 1. Disable Touchpad Device
+        Write-Log "Disabling touchpad device..." "INFO"
+        Disable-PnpDevice -InstanceId $device.InstanceId -Confirm:$false -ErrorAction SilentlyContinue
+        
+        # 2. Disable I2C Controllers
+        if ($i2cCtrls) {
+            foreach ($ctrl in $i2cCtrls) {
+                Write-Log "Disabling controller: $($ctrl.FriendlyName)..." "INFO"
+                Disable-PnpDevice -InstanceId $ctrl.InstanceId -Confirm:$false -ErrorAction SilentlyContinue
             }
         }
+
+        # 3. Disable GPIO Controllers
+        if ($gpioCtrls) {
+            foreach ($gpio in $gpioCtrls) {
+                Write-Log "Disabling GPIO controller: $($gpio.FriendlyName)..." "INFO"
+                Disable-PnpDevice -InstanceId $gpio.InstanceId -Confirm:$false -ErrorAction SilentlyContinue
+            }
+        }
+
+        # 4. Wait for power to drain
+        Write-Log "Waiting 3 seconds for power-cycle/drain..." "INFO"
+        Start-Sleep -Seconds 3
+
+        # 5. Enable GPIO Controllers (GPIO first to establish interrupts/power)
+        if ($gpioCtrls) {
+            foreach ($gpio in $gpioCtrls) {
+                Write-Log "Enabling GPIO controller: $($gpio.FriendlyName)..." "INFO"
+                Enable-PnpDevice -InstanceId $gpio.InstanceId -Confirm:$false -ErrorAction SilentlyContinue
+            }
+        }
+
+        # 6. Enable I2C Controllers
+        if ($i2cCtrls) {
+            foreach ($ctrl in $i2cCtrls) {
+                Write-Log "Enabling controller: $($ctrl.FriendlyName)..." "INFO"
+                Enable-PnpDevice -InstanceId $ctrl.InstanceId -Confirm:$false -ErrorAction SilentlyContinue
+            }
+        }
+
+        # 7. Enable Touchpad Device
+        Write-Log "Enabling touchpad device..." "INFO"
+        Enable-PnpDevice -InstanceId $device.InstanceId -Confirm:$false -ErrorAction SilentlyContinue
         Start-Sleep -Seconds 2
         
         $device = Get-TouchpadDevice
         if ($device.Status -eq "OK") {
             Write-Log "Success: Touchpad is now working (Method 2)." "SUCCESS"
-            Send-Notification -Title "Touchpad Auto-Fixer" -Message "I2C bus power-cycled. Touchpad is working (Method 2)."
+            Send-Notification -Title "Touchpad Auto-Fixer" -Message "Coordinated I2C/GPIO bus reset succeeded (Method 2)."
             return $true
         }
+    } catch {
+        Write-Log "Method 2 failed: $_" "WARNING"
     }
 
     # Method 3: Uninstall device and scan for hardware changes (Matches the manual user fix)
