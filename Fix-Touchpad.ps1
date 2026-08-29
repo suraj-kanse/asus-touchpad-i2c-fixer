@@ -409,6 +409,36 @@ function Register-CommandPath {
     }
 }
 
+function Unregister-CommandPath {
+    $scriptDir = [System.IO.Path]::GetDirectoryName($PSCommandPath)
+    Write-Log "Removing script directory from User PATH environment variable..." "INFO"
+    
+    try {
+        $currentPath = [Environment]::GetEnvironmentVariable("Path", "User")
+        $paths = $currentPath -split ";" | Where-Object { $_ -ne "" }
+        
+        # Normalize paths for comparison
+        $normalizedScriptDir = [System.IO.Path]::GetFullPath($scriptDir).TrimEnd([System.IO.Path]::DirectorySeparatorChar)
+        
+        $newPaths = $paths | Where-Object { 
+            [System.IO.Path]::GetFullPath($_).TrimEnd([System.IO.Path]::DirectorySeparatorChar) -ne $normalizedScriptDir 
+        }
+        
+        if ($paths.Count -eq $newPaths.Count) {
+            Write-Log "Directory is not registered in PATH." "WARNING"
+            return
+        }
+        
+        $newPath = $newPaths -join ";"
+        [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
+        
+        Write-Log "Successfully removed script directory from User PATH." "SUCCESS"
+    } catch {
+        Write-Log "Failed to unregister PATH: $_" "ERROR"
+        exit 1
+    }
+}
+
 # Main Execution Flow
 if (-not $Silent) {
     Write-Host "ASUS Touchpad Fixer Utility" -ForegroundColor White -BackgroundColor DarkBlue
