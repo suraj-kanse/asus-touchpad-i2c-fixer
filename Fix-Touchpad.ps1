@@ -325,6 +325,40 @@ function Unregister-AutomationTask {
     }
 }
 
+function New-StartMenuShortcut {
+    Write-Log "Creating Start Menu shortcut for manual execution..." "INFO"
+    
+    $startMenuPrograms = [System.IO.Path]::Combine($env:APPDATA, "Microsoft\Windows\Start Menu\Programs")
+    $shortcutPath = [System.IO.Path]::Combine($startMenuPrograms, "Fix Touchpad.lnk")
+    
+    try {
+        # Create shortcut via COM Object
+        $WshShell = New-Object -ComObject WScript.Shell
+        $Shortcut = $WshShell.CreateShortcut($shortcutPath)
+        $Shortcut.TargetPath = "powershell.exe"
+        $Shortcut.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$PSCommandPath`""
+        $Shortcut.WorkingDirectory = [System.IO.Path]::GetDirectoryName($PSCommandPath)
+        
+        # Use a nice system hardware/touchpad-like icon
+        $Shortcut.IconLocation = "$env:SystemRoot\System32\imageres.dll,26"
+        $Shortcut.Description = "Instantly diagnoses and resets the ASUS Touchpad and I2C controllers."
+        $Shortcut.Save()
+        
+        # Force the shortcut to run as Administrator by setting the 21st byte's 6th bit
+        if (Test-Path $shortcutPath) {
+            $bytes = [System.IO.File]::ReadAllBytes($shortcutPath)
+            $bytes[21] = $bytes[21] -bor 0x20
+            [System.IO.File]::WriteAllBytes($shortcutPath, $bytes)
+        }
+        
+        Write-Log "Successfully created Start Menu shortcut 'Fix Touchpad'." "SUCCESS"
+        Write-Log "You can now search for 'Fix Touchpad' in your Start Menu to reset the touchpad at any time." "SUCCESS"
+    } catch {
+        Write-Log "Failed to create Start Menu shortcut: $_" "ERROR"
+        exit 1
+    }
+}
+
 # Main Execution Flow
 if (-not $Silent) {
     Write-Host "ASUS Touchpad Fixer Utility" -ForegroundColor White -BackgroundColor DarkBlue
