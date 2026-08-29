@@ -380,6 +380,35 @@ function Remove-StartMenuShortcut {
     }
 }
 
+function Register-CommandPath {
+    $scriptDir = [System.IO.Path]::GetDirectoryName($PSCommandPath)
+    Write-Log "Registering script directory in User PATH environment variable..." "INFO"
+    Write-Log "Path: $scriptDir" "INFO"
+    
+    try {
+        $currentPath = [Environment]::GetEnvironmentVariable("Path", "User")
+        $paths = $currentPath -split ";" | Where-Object { $_ -ne "" }
+        
+        # Normalize paths to avoid slash and case mismatches
+        $normalizedPaths = $paths | ForEach-Object { [System.IO.Path]::GetFullPath($_).TrimEnd([System.IO.Path]::DirectorySeparatorChar) }
+        $normalizedScriptDir = [System.IO.Path]::GetFullPath($scriptDir).TrimEnd([System.IO.Path]::DirectorySeparatorChar)
+        
+        if ($normalizedPaths -contains $normalizedScriptDir) {
+            Write-Log "Directory is already registered in PATH." "SUCCESS"
+            return
+        }
+        
+        $newPath = ($paths + $scriptDir) -join ";"
+        [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
+        
+        Write-Log "Successfully added script directory to User PATH." "SUCCESS"
+        Write-Log "Please OPEN A NEW terminal window for the global 'Fix-Touchpad' command to take effect." "SUCCESS"
+    } catch {
+        Write-Log "Failed to register PATH: $_" "ERROR"
+        exit 1
+    }
+}
+
 # Main Execution Flow
 if (-not $Silent) {
     Write-Host "ASUS Touchpad Fixer Utility" -ForegroundColor White -BackgroundColor DarkBlue
