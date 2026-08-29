@@ -59,12 +59,17 @@ To keep system overhead at absolute zero, this utility is built with efficiency 
    ```powershell
    .\Fix-Touchpad.ps1 -Install
    ```
-3. (Optional) Create a Start Menu shortcut named "Fix Touchpad" for one-click manual resets:
+3. (Optional) Make the `Fix-Touchpad` command globally available from any folder/terminal:
+   ```powershell
+   .\Fix-Touchpad.ps1 -RegisterPath
+   ```
+   *Note: Open a NEW terminal window after running this. You can then run the utility from any directory by typing just `Fix-Touchpad`.*
+4. (Optional) Create a Start Menu shortcut named "Fix Touchpad" for one-click manual resets:
    ```powershell
    .\Fix-Touchpad.ps1 -CreateShortcut
    ```
    *Once created, you can simply press the Windows Key, search "Fix Touchpad", and press Enter to instantly reset the bus.*
-4. (Optional) Run the script manually in PowerShell at any time:
+5. (Optional) Run the script manually in PowerShell at any time:
    ```powershell
    # Standard diagnostic run (only resets if error is detected)
    .\Fix-Touchpad.ps1
@@ -81,10 +86,13 @@ To keep system overhead at absolute zero, this utility is built with efficiency 
 - `-Uninstall`: Removes the Windows Scheduled Task.
 - `-CreateShortcut`: Creates an elevated Windows Start Menu shortcut named "Fix Touchpad".
 - `-RemoveShortcut`: Deletes the "Fix Touchpad" Start Menu shortcut.
+- `-RegisterPath`: Adds the script folder to the Windows User PATH environment variable to enable the global `Fix-Touchpad` command.
+- `-UnregisterPath`: Removes the script folder from the environment PATH.
 
 ## Uninstallation
-To cleanly remove both the background task and the Start Menu shortcut, run:
+To cleanly remove the background task, Start Menu shortcut, and PATH registration, run:
 ```powershell
 .\Fix-Touchpad.ps1 -Uninstall
 .\Fix-Touchpad.ps1 -RemoveShortcut
+.\Fix-Touchpad.ps1 -UnregisterPath
 ```
