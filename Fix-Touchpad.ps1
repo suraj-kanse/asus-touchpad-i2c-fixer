@@ -359,6 +359,25 @@ function New-StartMenuShortcut {
     }
 }
 
+function Remove-StartMenuShortcut {
+    Write-Log "Removing Start Menu shortcut..." "INFO"
+    
+    $startMenuPrograms = [System.IO.Path]::Combine($env:APPDATA, "Microsoft\Windows\Start Menu\Programs")
+    $shortcutPath = [System.IO.Path]::Combine($startMenuPrograms, "Fix Touchpad.lnk")
+    
+    try {
+        if (Test-Path $shortcutPath) {
+            Remove-Item $shortcutPath -Force | Out-Null
+            Write-Log "Successfully removed Start Menu shortcut 'Fix Touchpad'." "SUCCESS"
+        } else {
+            Write-Log "Start Menu shortcut 'Fix Touchpad' does not exist." "WARNING"
+        }
+    } catch {
+        Write-Log "Failed to remove Start Menu shortcut: $_" "ERROR"
+        exit 1
+    }
+}
+
 # Main Execution Flow
 if (-not $Silent) {
     Write-Host "ASUS Touchpad Fixer Utility" -ForegroundColor White -BackgroundColor DarkBlue
