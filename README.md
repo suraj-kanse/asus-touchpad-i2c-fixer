@@ -55,11 +55,16 @@ To keep system overhead at absolute zero, this utility is built with efficiency 
 ## Installation & Setup
 
 1. Open PowerShell as **Administrator** and navigate to this folder.
-2. Run the following command to register the automatic background fixer:
+2. Register the automatic background fixer (Scheduled Task):
    ```powershell
    .\Fix-Touchpad.ps1 -Install
    ```
-3. (Optional) Run the script manually to diagnose or force a reset at any time:
+3. (Optional) Create a Start Menu shortcut named "Fix Touchpad" for one-click manual resets:
+   ```powershell
+   .\Fix-Touchpad.ps1 -CreateShortcut
+   ```
+   *Once created, you can simply press the Windows Key, search "Fix Touchpad", and press Enter to instantly reset the bus.*
+4. (Optional) Run the script manually in PowerShell at any time:
    ```powershell
    # Standard diagnostic run (only resets if error is detected)
    .\Fix-Touchpad.ps1
@@ -74,9 +79,12 @@ To keep system overhead at absolute zero, this utility is built with efficiency 
 - `-LogFile <Path>`: Logs actions to a text file (defaults to `C:\ProgramData\TouchpadFixer\touchpad-fixer.log`).
 - `-Install`: Installs the Windows Scheduled Task.
 - `-Uninstall`: Removes the Windows Scheduled Task.
+- `-CreateShortcut`: Creates an elevated Windows Start Menu shortcut named "Fix Touchpad".
+- `-RemoveShortcut`: Deletes the "Fix Touchpad" Start Menu shortcut.
 
 ## Uninstallation
-To remove the background task, run:
+To cleanly remove both the background task and the Start Menu shortcut, run:
 ```powershell
 .\Fix-Touchpad.ps1 -Uninstall
+.\Fix-Touchpad.ps1 -RemoveShortcut
 ```
