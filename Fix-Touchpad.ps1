@@ -9,7 +9,9 @@ param(
     [switch]$Install,
     [switch]$Uninstall,
     [switch]$CreateShortcut,
-    [switch]$RemoveShortcut
+    [switch]$RemoveShortcut,
+    [switch]$RegisterPath,
+    [switch]$UnregisterPath
 )
 
 $TOUCHPAD_HARDWARE_ID = "*ASUP1204*"
@@ -448,7 +450,7 @@ if (-not $Silent) {
 # 1. Check Admin Elevation for Task Actions or Reset
 $isAdmin = Test-IsAdmin
 
-if ($Install -or $Uninstall -or $CreateShortcut -or $RemoveShortcut) {
+if ($Install -or $Uninstall -or $CreateShortcut -or $RemoveShortcut -or $RegisterPath -or $UnregisterPath) {
     if ($Install -or $Uninstall) {
         if (-not $isAdmin) {
             Write-Log "Action requires Administrator privileges. Requesting elevation..." "WARNING"
@@ -475,6 +477,10 @@ if ($Install -or $Uninstall -or $CreateShortcut -or $RemoveShortcut) {
         New-StartMenuShortcut
     } elseif ($RemoveShortcut) {
         Remove-StartMenuShortcut
+    } elseif ($RegisterPath) {
+        Register-CommandPath
+    } elseif ($UnregisterPath) {
+        Unregister-CommandPath
     }
     exit 0
 }
