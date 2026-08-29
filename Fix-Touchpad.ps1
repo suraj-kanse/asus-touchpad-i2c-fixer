@@ -7,7 +7,9 @@ param(
     [switch]$Silent,
     [string]$LogFile = "$env:ProgramData\TouchpadFixer\touchpad-fixer.log",
     [switch]$Install,
-    [switch]$Uninstall
+    [switch]$Uninstall,
+    [switch]$CreateShortcut,
+    [switch]$RemoveShortcut
 )
 
 $TOUCHPAD_HARDWARE_ID = "*ASUP1204*"
@@ -387,20 +389,22 @@ if (-not $Silent) {
 # 1. Check Admin Elevation for Task Actions or Reset
 $isAdmin = Test-IsAdmin
 
-if ($Install -or $Uninstall) {
-    if (-not $isAdmin) {
-        Write-Log "Action requires Administrator privileges. Requesting elevation..." "WARNING"
-        $argList = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
-        if ($Install) { $argList += " -Install" }
-        if ($Uninstall) { $argList += " -Uninstall" }
-        if ($LogFile) { $argList += " -LogFile `"$LogFile`"" }
-        
-        try {
-            Start-Process powershell -ArgumentList $argList -Verb RunAs
-            exit 0
-        } catch {
-            Write-Log "UAC elevation failed. Please run PowerShell as Administrator to install/uninstall." "ERROR"
-            exit 1
+if ($Install -or $Uninstall -or $CreateShortcut -or $RemoveShortcut) {
+    if ($Install -or $Uninstall) {
+        if (-not $isAdmin) {
+            Write-Log "Action requires Administrator privileges. Requesting elevation..." "WARNING"
+            $argList = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
+            if ($Install) { $argList += " -Install" }
+            if ($Uninstall) { $argList += " -Uninstall" }
+            if ($LogFile) { $argList += " -LogFile `"$LogFile`"" }
+            
+            try {
+                Start-Process powershell -ArgumentList $argList -Verb RunAs
+                exit 0
+            } catch {
+                Write-Log "UAC elevation failed. Please run PowerShell as Administrator to install/uninstall." "ERROR"
+                exit 1
+            }
         }
     }
 
@@ -408,6 +412,10 @@ if ($Install -or $Uninstall) {
         Register-AutomationTask
     } elseif ($Uninstall) {
         Unregister-AutomationTask
+    } elseif ($CreateShortcut) {
+        New-StartMenuShortcut
+    } elseif ($RemoveShortcut) {
+        Remove-StartMenuShortcut
     }
     exit 0
 }
